@@ -27,7 +27,7 @@ was branched from.
 | File | Purpose |
 |------|---------|
 | `pyproject.toml` | scikit-build-core build config + all cibuildwheel settings (matrix, per-OS dependency env, repair commands). Single source of the package name; version is read from the CMake `project()` call. |
-| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts. Contains a commented-out PyPI-publish job for later. |
+| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts. One job per (OS, Python) so all 12 build in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
 | `cmake/PyAlembicWheel.cmake` | Bundles the prebuilt PyImath `imath` extension into the wheel. No-op outside scikit-build wheel builds. |
 | `scripts/ci/wheel_deps_prepare.sh` | cibuildwheel `before-all`: downloads Boost + Imath sources, bootstraps Boost's `b2`, patches Imath's Python CMake for manylinux. |
 | `scripts/ci/wheel_deps_build.sh` | cibuildwheel `before-build`: builds **shared** Boost.Python + Imath/PyImath against the exact target CPython. |
@@ -93,16 +93,25 @@ test suite run on the versions we build (3.10–3.13). No test logic changes.
 
 ## How the wheel is built
 
-1. **cibuildwheel** drives the whole matrix (config in `pyproject.toml`).
-2. Per job: `wheel_deps_prepare.sh` fetches Boost + Imath sources.
-3. Per Python version: `wheel_deps_build.sh` builds **shared** Boost.Python and
-   Imath/PyImath against that interpreter into a fixed prefix.
+1. **cibuildwheel** drives each build (config in `pyproject.toml`). The workflow
+   runs one job per (OS, Python version) so all 12 build in parallel.
+2. `wheel_deps_prepare.sh` fetches Boost + Imath sources.
+3. `wheel_deps_build.sh` builds **shared** Boost.Python and Imath/PyImath against
+   that interpreter into a fixed prefix.
 4. **scikit-build-core** builds Alembic with `USE_PYALEMBIC=ON`,
    `ALEMBIC_SHARED_LIBS=OFF` (static core), `PYALEMBIC_MODULE_NAME=alembic3d`,
    producing the `alembic3d` extension and bundling the `imath` extension.
 5. The repair tools (auditwheel / delocate / delvewheel) vendor the shared
    Boost.Python, PyImath and Imath libraries into the wheel.
 6. `run_wheel_tests.py` installs the wheel and runs the upstream test suite.
+
+### Dependency caching
+The compiled Boost+Imath prefix is cached with `actions/cache`, keyed on
+(OS, Python, dep-script hash), so unchanged dependencies are restored instead of
+recompiled. `wheel_deps_prepare.sh` / `wheel_deps_build.sh` skip their work when
+a `.complete` marker is present in the restored prefix. On Linux the cache dir is
+a host path bind-mounted into the manylinux container (`CIBW_CONTAINER_ENGINE`)
+so the container's writes persist to the host for caching.
 
 ### Why Boost.Python and PyImath must be shared, and `imath` ships in the wheel
 Boost.Python keeps a single global type-converter registry inside

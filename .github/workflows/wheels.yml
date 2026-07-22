@@ -30,25 +30,59 @@ concurrency:
 
 jobs:
   build_wheels:
-    name: Wheels (${{ matrix.os }})
+    name: ${{ matrix.py }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # One job per (OS, Python version) so all 12 build in parallel instead of
+      # each OS building the four Python versions sequentially. Each job also
+      # caches its compiled Boost.Python + Imath so unchanged deps are restored
+      # instead of recompiled.
       matrix:
         # macos-14 = arm64 (Apple Silicon). Intel macOS (macos-13) was retired
         # by GitHub and Intel runners are now paid-only, so x86_64 macOS wheels
         # are not built; Intel Mac users can build from source.
         os: [ubuntu-24.04, windows-2022, macos-14]
+        py: [cp310, cp311, cp312, cp313]
+        include:
+          # Host path that holds the compiled deps and is cached. On Linux it is
+          # bind-mounted into the manylinux container (see CIBW_CONTAINER_ENGINE)
+          # so the container's writes persist to the host for caching.
+          - os: ubuntu-24.04
+            cache_path: /tmp/wheel-deps
+          - os: windows-2022
+            cache_path: C:/wheel-deps
+          - os: macos-14
+            cache_path: /Users/runner/wheel-deps
+    env:
+      # Build only this job's Python version (overrides pyproject build list).
+      CIBW_BUILD: ${{ matrix.py }}-*
+      # Bind-mount the host dep cache into the manylinux container. Ignored on
+      # macOS/Windows (no container). The container path matches DEPS_DIR in
+      # pyproject's [tool.cibuildwheel.linux].environment.
+      CIBW_CONTAINER_ENGINE: "docker; create_args: -v /tmp/wheel-deps:/opt/wheel-deps"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build wheels
+      - name: Prepare dep cache dir
+        shell: bash
+        run: mkdir -p "${{ matrix.cache_path }}"
+
+      - name: Cache compiled Boost + Imath
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache_path }}
+          # Bust the cache when the dependency build scripts change (they pin the
+          # Boost/Imath versions).
+          key: wheel-deps-${{ matrix.os }}-${{ matrix.py }}-${{ hashFiles('scripts/ci/wheel_deps_prepare.sh', 'scripts/ci/wheel_deps_build.sh') }}
+
+      - name: Build wheel
         uses: pypa/cibuildwheel@v3.1.4
 
-      - name: Upload wheels
+      - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.os }}-${{ matrix.py }}
           path: wheelhouse/*.whl
           if-no-files-found: error
 

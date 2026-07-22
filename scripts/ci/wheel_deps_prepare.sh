@@ -22,6 +22,13 @@ BOOST_VERSION="${BOOST_VERSION:-1.87.0}"
 IMATH_VERSION="${IMATH_VERSION:-3.1.12}"
 DEPS_SRC="${DEPS_SRC:?DEPS_SRC must be set}"
 
+# If the compiled deps are already present (restored from the CI cache), there
+# is nothing to download or bootstrap.
+if [ -n "${DEPS_DIR:-}" ] && [ -f "${DEPS_DIR}/.complete" ]; then
+    echo "== wheel_deps_prepare: cached deps at ${DEPS_DIR}, skipping source prep =="
+    exit 0
+fi
+
 BOOST_UNDERSCORE="boost_${BOOST_VERSION//./_}"
 
 echo "== wheel_deps_prepare: Boost ${BOOST_VERSION}, Imath ${IMATH_VERSION} =="

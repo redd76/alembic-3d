@@ -23,9 +23,18 @@ case "$(uname -s)" in
     Darwin)               IS_MACOS=1 ;;
 esac
 
+# Skip the whole build if a complete prefix was restored from the CI cache.
+if [ -f "${DEPS_DIR}/.complete" ]; then
+    echo "== wheel_deps_build: cached deps at ${DEPS_DIR}, skipping build =="
+    exit 0
+fi
+
 echo "== wheel_deps_build: fresh prefix ${DEPS_DIR} =="
-rm -rf "${DEPS_DIR}"
+# Clear the prefix CONTENTS (not the directory itself: on Linux it is a bind
+# mount, and removing the mount point fails with "device busy"). This wipes any
+# partial leftovers before a fresh build.
 mkdir -p "${DEPS_DIR}"
+rm -rf "${DEPS_DIR:?}"/* "${DEPS_DIR:?}"/.[!.]* 2>/dev/null || true
 
 # --- discover the target interpreter ----------------------------------------
 # cibuildwheel puts the target python first on PATH.
@@ -108,4 +117,8 @@ if ! ls "${DEPS_DIR}/sitepkg"/imath.* >/dev/null 2>&1; then
     ls -la "${DEPS_DIR}/sitepkg" || true
     exit 1
 fi
+
+# Mark the prefix complete so the CI cache can be reused and the prepare/build
+# steps skipped on the next run. Written last so a partial build is never cached.
+touch "${DEPS_DIR}/.complete"
 echo "== wheel_deps_build: done =="
