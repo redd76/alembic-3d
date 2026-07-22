@@ -33,12 +33,46 @@
 ##
 ##-*****************************************************************************
 
+# Locate PyImath, which Alembic links against for the Python bindings.
+#
+# Imath exposes PyImath inconsistently across versions/build configs:
+#   * Some installs export an imported target Imath::PyImath (COMPONENTS path).
+#   * Older 3.0/3.1 exported Imath::PyImath_Python<maj>_<min>.
+#   * A from-source Imath 3.1 build installs the shared library
+#     (libPyImath_Python<maj>_<min>-<Imath maj>_<min>.{so,dylib,lib}) but does
+#     NOT export any PyImath CMake target at all.
+# Try the imported targets first, then fall back to locating the library file.
 FIND_PACKAGE(Imath COMPONENTS PyImath)
-IF (Imath_FOUND)
+IF (Imath_FOUND AND TARGET Imath::PyImath)
     SET(ALEMBIC_PYIMATH_LIB Imath::PyImath)
 ELSE()
-    # Fallback for older versions of Imath 3 and 3.1
-    FIND_PACKAGE(Imath)
-    SET(ALEMBIC_PYIMATH_LIB Imath::PyImath_Python${Python_VERSION_MAJOR}_${Python_VERSION_MINOR})
-    MESSAGE(STATUS "Found package Imath using: ${ALEMBIC_PYIMATH_LIB}")
+    FIND_PACKAGE(Imath REQUIRED)
+    SET(_pyimath_suffix Python${Python_VERSION_MAJOR}_${Python_VERSION_MINOR})
+    IF (TARGET Imath::PyImath)
+        SET(ALEMBIC_PYIMATH_LIB Imath::PyImath)
+    ELSEIF (TARGET Imath::PyImath_${_pyimath_suffix})
+        SET(ALEMBIC_PYIMATH_LIB Imath::PyImath_${_pyimath_suffix})
+    ELSE()
+        # No exported target: find the installed library directly. Names cover
+        # the version-suffixed soname (PyImath_Python3_12-3_1) as well as
+        # unsuffixed variants.
+        FIND_LIBRARY(ALEMBIC_PYIMATH_LIBRARY
+            NAMES
+                PyImath_${_pyimath_suffix}-${Imath_VERSION_MAJOR}_${Imath_VERSION_MINOR}
+                PyImath_${_pyimath_suffix}
+                PyImath-${Imath_VERSION_MAJOR}_${Imath_VERSION_MINOR}
+                PyImath
+        )
+        IF (NOT ALEMBIC_PYIMATH_LIBRARY)
+            MESSAGE(FATAL_ERROR "Could not find a PyImath target or library from Imath")
+        ENDIF()
+        SET(ALEMBIC_PYIMATH_LIB ${ALEMBIC_PYIMATH_LIBRARY})
+        # A bare library path carries no include dirs; PyImath*.h live in
+        # Imath's include dir, so propagate it from the Imath::Imath target.
+        GET_TARGET_PROPERTY(_imath_incs Imath::Imath INTERFACE_INCLUDE_DIRECTORIES)
+        IF (_imath_incs)
+            INCLUDE_DIRECTORIES(${_imath_incs})
+        ENDIF()
+    ENDIF()
+    MESSAGE(STATUS "Found package Imath using PyImath: ${ALEMBIC_PYIMATH_LIB}")
 ENDIF()
