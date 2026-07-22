@@ -41,12 +41,15 @@ echo "  include: ${PY_INCLUDE}"
 cd "${DEPS_SRC}/boost"
 
 if [[ "${IS_WINDOWS:-0}" == "1" ]]; then
-    # On Windows, b2 auto-links pythonXY.lib (correct there). Convert the
-    # interpreter path to a native path for user-config.
+    # On Windows b2 links pythonXY.lib, which lives in the *base* interpreter's
+    # "libs" dir, not in cibuildwheel's venv. Point b2 there explicitly via the
+    # 4th "libraries" field of the python rule, or linking fails (LNK1181).
+    PY_LIBDIR="$(python -c 'import sys, os; print(os.path.join(sys.base_prefix, "libs"))')"
     PY_EXE_NATIVE="$(cygpath -w "${PY_EXE}" 2>/dev/null || echo "${PY_EXE}")"
     PY_INCLUDE_NATIVE="$(cygpath -w "${PY_INCLUDE}" 2>/dev/null || echo "${PY_INCLUDE}")"
+    PY_LIBDIR_NATIVE="$(cygpath -w "${PY_LIBDIR}" 2>/dev/null || echo "${PY_LIBDIR}")"
     cat > user-config.jam <<EOF
-using python : ${PY_VER} : "${PY_EXE_NATIVE//\\/\\\\}" : "${PY_INCLUDE_NATIVE//\\/\\\\}" ;
+using python : ${PY_VER} : "${PY_EXE_NATIVE//\\/\\\\}" : "${PY_INCLUDE_NATIVE//\\/\\\\}" : "${PY_LIBDIR_NATIVE//\\/\\\\}" ;
 EOF
     ./b2 --user-config=user-config.jam --with-python \
         toolset=msvc address-model=64 \
