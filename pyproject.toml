@@ -21,9 +21,13 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "alembic3d"
 dynamic = ["version"]
-description = "PyAlembic bindings for the Alembic 3D interchange format (fork; import name: alembic3d)"
-readme = { file = "README.txt", content-type = "text/plain" }
-license = { file = "LICENSE.txt" }
+description = "Unofficial PyAlembic bindings for the Alembic 3D interchange format (import name: alembic3d; not affiliated with the Alembic project)"
+readme = "README-pypi.md"
+license = "BSD-3-Clause"
+# Notices bundled into the wheel's .dist-info/licenses/. THIRD-PARTY.txt carries
+# the Boost.Python (BSL-1.0) notice; Imath-LICENSE.md covers the vendored Imath /
+# PyImath binaries (BSD-3-Clause requires reproducing the notice for binaries).
+license-files = ["LICENSE.txt", "THIRD-PARTY.txt", "licenses/Imath-LICENSE.md"]
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3.10",

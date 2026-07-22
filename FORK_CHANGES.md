@@ -35,6 +35,8 @@ was branched from.
 | `scripts/ci/run_wheel_tests.py` | cibuildwheel `test-command`: aliases `alembic3d` back to `alembic` and runs the upstream `RunTests.py` suite unmodified. |
 | `scripts/ci/README.md` | Documents the CI dependency scripts and the shared-library requirement. |
 | `.gitattributes` | Forces `*.sh` to LF so the shell scripts run on the Linux/macOS runners. |
+| `README-pypi.md` | PyPI long-description: usage plus a notice that this is an unofficial fork, not affiliated with the Alembic project. |
+| `licenses/Imath-LICENSE.md` | Imath/PyImath BSD-3-Clause notice, bundled into the wheel because the wheel ships Imath's compiled libraries. |
 | `FORK_CHANGES.md` | This document. |
 
 ## Modified upstream files
@@ -105,6 +107,16 @@ test suite run on the versions we build (3.10–3.13). No test logic changes.
 5. The repair tools (auditwheel / delocate / delvewheel) vendor the shared
    Boost.Python, PyImath and Imath libraries into the wheel.
 6. `run_wheel_tests.py` installs the wheel and runs the upstream test suite.
+
+### Licensing of the wheel
+All components are permissive (no copyleft): Alembic is BSD-3-Clause, Imath/PyImath
+is BSD-3-Clause, Boost.Python is BSL-1.0. `pyproject.toml` sets
+`license = "BSD-3-Clause"` and `license-files` so every wheel carries the Alembic
+(`LICENSE.txt`), Boost (`THIRD-PARTY.txt`), and Imath (`licenses/Imath-LICENSE.md`)
+notices in `.dist-info/licenses/` — required because the wheel redistributes those
+libraries in binary form. `README-pypi.md` states the package is an unofficial
+fork, not endorsed by the Alembic project (respecting the BSD non-endorsement
+clause).
 
 ### Dependency caching
 The compiled Boost+Imath prefix is cached with `actions/cache`, keyed on
