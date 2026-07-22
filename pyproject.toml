@@ -1,0 +1,108 @@
+# Python wheel packaging for the PyAlembic bindings (fork addition).
+#
+# The distribution and import name is "alembic3d" (not "alembic") so it does
+# not clash with SQLAlchemy's alembic migration tool on PyPI or at import time.
+#
+#   pip install alembic3d
+#   import alembic3d
+#   from alembic3d.Abc import *
+#   from alembic3d.AbcGeom import *
+#   import imath          # bundled inside the wheel (PyImath)
+#
+# Build one wheel locally (see scripts/ci/README notes):
+#   pipx run cibuildwheel --only cp312-win_amd64
+#
+# All cibuildwheel configuration lives here so local runs match CI exactly.
+
+[build-system]
+requires = ["scikit-build-core>=0.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "alembic3d"
+dynamic = ["version"]
+description = "PyAlembic bindings for the Alembic 3D interchange format (fork; import name: alembic3d)"
+readme = "README.txt"
+license = { file = "LICENSE.txt" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: C++",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+
+[project.urls]
+Homepage = "https://github.com/redd76/alembic-3d"
+
+# ---------------------------------------------------------------------------
+# scikit-build-core: drive the existing CMake build to produce the wheel.
+# ---------------------------------------------------------------------------
+[tool.scikit-build]
+minimum-version = "0.11"
+cmake.version = ">=3.29"
+# Pinned build dir so repair tools / debugging can find intermediates.
+build-dir = "build/{wheel_tag}"
+# We only want the two extension modules in the wheel, not the full C++
+# install tree (headers, static libs, cmake config, CLI binaries).
+wheel.install-dir = "."
+wheel.exclude = [
+    "include/**",
+    "lib/**",
+    "lib64/**",
+    "bin/**",
+    "share/**",
+    "**/*.a",
+    "**/*.lib",
+    "**/*.cmake",
+]
+
+# Version is the single source of truth in the root CMakeLists project() call.
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "CMakeLists.txt"
+regex = 'PROJECT\(Alembic VERSION (?P<value>[0-9]+\.[0-9]+\.[0-9]+)\)'
+
+[tool.scikit-build.cmake.define]
+USE_PYALEMBIC = "ON"
+USE_TESTS = "OFF"
+USE_BINARIES = "OFF"
+USE_EXAMPLES = "OFF"
+# Static Alembic core + PIC: only Boost.Python/PyImath/Imath (shared) need
+# vendoring by auditwheel/delocate/delvewheel.
+ALEMBIC_SHARED_LIBS = "OFF"
+CMAKE_POSITION_INDEPENDENT_CODE = "ON"
+# The rename knob and the wheel-layout / bundling settings.
+PYALEMBIC_MODULE_NAME = "alembic3d"
+ALEMBIC_PYTHON_INSTALL_DIR = "."
+PYALEMBIC_BUNDLE_IMATH_DIR = { env = "PYALEMBIC_BUNDLE_IMATH_DIR", default = "" }
+
+# ---------------------------------------------------------------------------
+# cibuildwheel: matrix + per-platform dependency provisioning.
+# ---------------------------------------------------------------------------
+[tool.cibuildwheel]
+build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*"]
+# musllinux/32-bit are out of scope; VFX tooling is glibc/64-bit.
+skip = ["*-musllinux_*", "*_i686", "*-win32", "*t-*"]
+build-verbosity = 1
+manylinux-x86_64-image = "manylinux_2_28"
+# before-all runs once per job: download + prepare dependency sources.
+before-all = "bash {project}/scripts/ci/wheel_deps_prepare.sh"
+# before-build runs once per Python version: build Boost.Python + PyImath
+# against that exact interpreter.
+before-build = "bash {project}/scripts/ci/wheel_deps_build.sh"
+test-command = "python {project}/scripts/ci/run_wheel_tests.py"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+environment = { DEPS_DIR = "/opt/wheel-deps", DEPS_SRC = "/opt/wheel-deps-src", BOOST_ROOT = "/opt/wheel-deps", CMAKE_PREFIX_PATH = "/opt/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "/opt/wheel-deps/sitepkg", LD_LIBRARY_PATH = "/opt/wheel-deps/lib:/opt/wheel-deps/lib64" }
+
+[tool.cibuildwheel.macos]
+environment = { DEPS_DIR = "$HOME/wheel-deps", DEPS_SRC = "$HOME/wheel-deps-src", BOOST_ROOT = "$HOME/wheel-deps", CMAKE_PREFIX_PATH = "$HOME/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "$HOME/wheel-deps/sitepkg", MACOSX_DEPLOYMENT_TARGET = "11.0", DYLD_LIBRARY_PATH = "$HOME/wheel-deps/lib", CMAKE_ARGS = "-DCMAKE_INSTALL_RPATH=$HOME/wheel-deps/lib" }
+
+[tool.cibuildwheel.windows]
+environment = { DEPS_DIR = "C:/wheel-deps", DEPS_SRC = "C:/wheel-deps-src", BOOST_ROOT = "C:/wheel-deps", CMAKE_PREFIX_PATH = "C:/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "C:/wheel-deps/sitepkg", CXXFLAGS = "-DBOOST_ALL_NO_LIB -DBOOST_PYTHON_DYN_LINK" }
+before-build = "pip install delvewheel && bash {project}/scripts/ci/wheel_deps_build.sh"
+repair-wheel-command = "delvewheel repair --add-path C:/wheel-deps/lib;C:/wheel-deps/bin -w {dest_dir} {wheel}"

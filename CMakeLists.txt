@@ -236,7 +236,7 @@ ENDIF()
 # PyAlembic
 IF (USE_PYALEMBIC)
 
-    FIND_PACKAGE(Python COMPONENTS Interpreter Development)
+    FIND_PACKAGE(Python COMPONENTS Interpreter Development.Module)
 
     if(Python_FOUND)
         MESSAGE(STATUS "Found Python ${Python_VERSION}")

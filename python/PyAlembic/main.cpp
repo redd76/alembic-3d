@@ -35,6 +35,17 @@
 
 #include <boost/python.hpp>
 
+// Configurable import name so wheel builds can avoid clashing with other
+// packages named "alembic". BOOST_PYTHON_MODULE expands macro arguments,
+// so passing -DPYALEMBIC_MODULE_NAME=<name> renames the module and its
+// init function; the default preserves upstream behavior.
+#ifndef PYALEMBIC_MODULE_NAME
+#define PYALEMBIC_MODULE_NAME alembic
+#endif
+#define PYALEMBIC_STR_(x) #x
+#define PYALEMBIC_STR(x) PYALEMBIC_STR_(x)
+#define PYALEMBIC_MODULE_NAME_STR PYALEMBIC_STR(PYALEMBIC_MODULE_NAME)
+
 using namespace boost::python;
 
 // forwards
@@ -112,7 +123,7 @@ void register_materialassignment();
 void register_icollections();
 void register_ocollections();
 
-BOOST_PYTHON_MODULE( alembic )
+BOOST_PYTHON_MODULE( PYALEMBIC_MODULE_NAME )
 {
     docstring_options doc_options( true, true, false );
 
@@ -122,11 +133,11 @@ BOOST_PYTHON_MODULE( alembic )
     register_typedarraysampleconverters();
 
     object package = scope();
-    package.attr( "__path__" ) = "alembic";
+    package.attr( "__path__" ) = PYALEMBIC_MODULE_NAME_STR;
 
     {
         const char* scopeName = "AbcCoreAbstract";
-        const char* moduleName = "alembic.AbcCoreAbstract";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".AbcCoreAbstract";
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
         scope().attr( scopeName ) = module;
@@ -137,7 +148,7 @@ BOOST_PYTHON_MODULE( alembic )
 
     {
         const char* scopeName = "Util";
-        const char* moduleName = "alembic.Util";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".Util";
 
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
@@ -149,7 +160,7 @@ BOOST_PYTHON_MODULE( alembic )
 
     {
         const char* scopeName = "Abc";
-        const char* moduleName = "alembic.Abc";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".Abc";
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
         scope().attr( scopeName ) = module;
@@ -182,7 +193,7 @@ BOOST_PYTHON_MODULE( alembic )
 
     {
         const char* scopeName = "AbcGeom";
-        const char* moduleName = "alembic.AbcGeom";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".AbcGeom";
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
         scope().attr( scopeName ) = module;
@@ -232,7 +243,7 @@ BOOST_PYTHON_MODULE( alembic )
 
    {
         const char* scopeName = "AbcCollection";
-        const char* moduleName = "alembic.AbcCollection";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".AbcCollection";
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
         scope().attr( scopeName ) = module;
@@ -244,7 +255,7 @@ BOOST_PYTHON_MODULE( alembic )
 
    {
         const char* scopeName = "AbcMaterial";
-        const char* moduleName = "alembic.AbcMaterial";
+        const char* moduleName = PYALEMBIC_MODULE_NAME_STR ".AbcMaterial";
         object module( handle<>( borrowed( PyImport_AddModule(
                                             moduleName ) ) ) );
         scope().attr( scopeName ) = module;

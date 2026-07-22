@@ -146,7 +146,7 @@ Python_add_library(alembic ${CPP_FILES} WITH_SOABI)
 TARGET_LINK_LIBRARIES(alembic
     LINK_PUBLIC
     Alembic::Alembic
-    Python::Python
+    Python::Module
     ${Boost_LIBRARIES}
     ${ALEMBIC_PYIMATH_LIB}
 )
@@ -160,6 +160,17 @@ SET( ALEMBIC_PYTHON_INSTALL_DIR
 INSTALL (TARGETS alembic
     DESTINATION ${ALEMBIC_PYTHON_INSTALL_DIR}
 )
+
+# --- fork addition: configurable module name for wheel builds -----------------
+# Default "alembic" keeps upstream behavior; wheel builds pass e.g. alembic3d
+# so the package can coexist with SQLAlchemy's alembic.
+SET(PYALEMBIC_MODULE_NAME "alembic" CACHE STRING "Import name of the PyAlembic module")
+IF (NOT PYALEMBIC_MODULE_NAME STREQUAL "alembic")
+    SET_TARGET_PROPERTIES(alembic PROPERTIES OUTPUT_NAME ${PYALEMBIC_MODULE_NAME})
+    TARGET_COMPILE_DEFINITIONS(alembic PRIVATE PYALEMBIC_MODULE_NAME=${PYALEMBIC_MODULE_NAME})
+ENDIF()
+INCLUDE("${PROJECT_SOURCE_DIR}/cmake/PyAlembicWheel.cmake")
+# ------------------------------------------------------------------------------
 
 # Not sure about the best way to find the Imath python bindings for Mac
 IF (USE_TESTS AND NOT APPLE)

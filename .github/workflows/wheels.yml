@@ -1,0 +1,70 @@
+name: Wheels
+
+# Builds the alembic3d Python wheels (PyAlembic bindings, renamed to avoid the
+# SQLAlchemy "alembic" clash) for Windows, Linux (manylinux) and macOS across
+# CPython 3.10-3.13 via cibuildwheel. Configuration lives in pyproject.toml.
+#
+# For now wheels are published only as build artifacts. To publish to PyPI,
+# uncomment the "publish" job and configure a trusted publisher / the "pypi"
+# environment on GitHub.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - pyproject.toml
+      - .github/workflows/wheels.yml
+      - scripts/ci/**
+      - cmake/PyAlembicWheel.cmake
+      - python/**
+      - CMakeLists.txt
+
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_wheels:
+    name: Wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-13 = x86_64 runner, macos-14 = arm64 (Apple Silicon) runner.
+        os: [ubuntu-24.04, windows-2022, macos-13, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.1.4
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI on tags. Enable once the project is registered on PyPI with
+  # a trusted publisher (https://docs.pypi.org/trusted-publishers/) pointing at
+  # this workflow, and a "pypi" environment exists on this repo.
+  # ---------------------------------------------------------------------------
+  # publish:
+  #   name: Publish to PyPI
+  #   needs: build_wheels
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write          # trusted publishing (OIDC)
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist
+  #         merge-multiple: true
+  #     - uses: pypa/gh-action-pypi-publish@release/v1
