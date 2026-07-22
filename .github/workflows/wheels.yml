@@ -4,9 +4,9 @@ name: Wheels
 # SQLAlchemy "alembic" clash) for Windows, Linux (manylinux) and macOS across
 # CPython 3.10-3.13 via cibuildwheel. Configuration lives in pyproject.toml.
 #
-# For now wheels are published only as build artifacts. To publish to PyPI,
-# uncomment the "publish" job and configure a trusted publisher / the "pypi"
-# environment on GitHub.
+# Wheels upload as build artifacts on every run, and are attached to a GitHub
+# Release when a v* tag is pushed. To also publish to PyPI, uncomment the
+# "publish" job and configure a trusted publisher / the "pypi" environment.
 
 on:
   workflow_dispatch:
@@ -83,6 +83,37 @@ jobs:
           name: wheels-${{ matrix.os }}-${{ matrix.py }}
           path: wheelhouse/*.whl
           if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Attach all wheels to a GitHub Release when a v* tag is pushed.
+  #   git tag v1.8.12 && git push origin v1.8.12
+  # ---------------------------------------------------------------------------
+  github_release:
+    name: GitHub Release
+    needs: build_wheels
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # required to create/update releases
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --generate-notes --verify-tag
+          fi
 
   # ---------------------------------------------------------------------------
   # Publish to PyPI on tags. Enable once the project is registered on PyPI with

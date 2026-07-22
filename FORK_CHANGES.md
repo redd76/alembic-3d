@@ -27,7 +27,7 @@ was branched from.
 | File | Purpose |
 |------|---------|
 | `pyproject.toml` | scikit-build-core build config + all cibuildwheel settings (matrix, per-OS dependency env, repair commands). Single source of the package name; version is read from the CMake `project()` call. |
-| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts. One job per (OS, Python) so all 12 build in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
+| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts, and attaches them to a **GitHub Release** on `v*` tags. One job per (OS, Python) so all 12 build in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
 | `cmake/PyAlembicWheel.cmake` | Bundles the prebuilt PyImath `imath` extension into the wheel. No-op outside scikit-build wheel builds. |
 | `scripts/ci/wheel_deps_prepare.sh` | cibuildwheel `before-all`: downloads Boost + Imath sources, bootstraps Boost's `b2`, patches Imath's Python CMake for manylinux. |
 | `scripts/ci/wheel_deps_build.sh` | cibuildwheel `before-build`: builds **shared** Boost.Python + Imath/PyImath against the exact target CPython. |
@@ -128,6 +128,15 @@ Both extensions must therefore resolve to the same shared libraries, and the
   Intel macOS is now paid-only, so x86_64 macOS wheels are not built; Intel Mac
   users can build from source.
 - **Python** — CPython 3.10–3.13.
+
+## Releasing
+Push a version tag and the workflow builds all 12 wheels and attaches them to a
+GitHub Release for that tag:
+```bash
+git tag v1.8.12
+git push origin v1.8.12
+```
+Re-running a tag re-uploads (clobbers) the wheels on the existing release.
 
 ## Building one wheel locally
 See `scripts/ci/README.md`. On Windows, from a target-Python venv with VS 2022
