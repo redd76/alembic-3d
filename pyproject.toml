@@ -85,9 +85,7 @@ PYALEMBIC_BUNDLE_IMATH_DIR = { env = "PYALEMBIC_BUNDLE_IMATH_DIR", default = "" 
 # cibuildwheel: matrix + per-platform dependency provisioning.
 # ---------------------------------------------------------------------------
 [tool.cibuildwheel]
-# TODO: restore full range ["cp310-*", "cp311-*", "cp312-*", "cp313-*"] before
-# merge. Narrowed to cp312 to speed up CI iteration (one dep build per job).
-build = ["cp312-*"]
+build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*"]
 # musllinux/32-bit are out of scope; VFX tooling is glibc/64-bit.
 skip = ["*-musllinux_*", "*_i686", "*-win32", "*t-*"]
 build-verbosity = 1

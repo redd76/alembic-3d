@@ -35,8 +35,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 = x86_64 runner, macos-14 = arm64 (Apple Silicon) runner.
-        os: [ubuntu-24.04, windows-2022, macos-13, macos-14]
+        # macos-14 = arm64 (Apple Silicon). Intel macOS (macos-13) was retired
+        # by GitHub and Intel runners are now paid-only, so x86_64 macOS wheels
+        # are not built; Intel Mac users can build from source.
+        os: [ubuntu-24.04, windows-2022, macos-14]
     steps:
       - uses: actions/checkout@v4
 
