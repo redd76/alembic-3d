@@ -70,5 +70,5 @@ class PropExceptTest(unittest.TestCase):
         p = props.getProperty("myprop")
         self.assertEqual(p.getName(), "myprop")
 
-        self.failUnlessRaises(KeyError, props.getProperty, "notfound")
+        self.assertRaises(KeyError, props.getProperty, "notfound")
         self.assertRaises(IndexError, props.getProperty, 99)

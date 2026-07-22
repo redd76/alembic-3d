@@ -60,7 +60,7 @@ class CurvesTest(unittest.TestCase):
                                            widthSamp, uvSamp )
 
         knots = curvesSamp.getKnots()
-        self.assertEquals(len(knots), 0)
+        self.assertEqual(len(knots), 0)
 
         newKnots = FloatArray(4)
         for ii in range(4):
