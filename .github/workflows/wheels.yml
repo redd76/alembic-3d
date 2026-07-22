@@ -11,9 +11,7 @@ name: Wheels
 on:
   workflow_dispatch:
   push:
-    # TODO: remove "python-wheels" before merging — it's here so CI runs while
-    # iterating on the wheel build on the feature branch.
-    branches: [master, python-wheels]
+    branches: [master]
     tags: ["v*"]
   pull_request:
     paths:
