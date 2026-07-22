@@ -46,8 +46,9 @@ cmake.version = ">=3.29"
 # Pinned build dir so repair tools / debugging can find intermediates.
 build-dir = "build/{wheel_tag}"
 # We only want the two extension modules in the wheel, not the full C++
-# install tree (headers, static libs, cmake config, CLI binaries).
-wheel.install-dir = "."
+# install tree (headers, static libs, cmake config, CLI binaries). The modules
+# install to SKBUILD_PLATLIB_DIR (see python/PyAlembic/CMakeLists.txt); these
+# excludes drop everything else the root install() emits under the platlib.
 wheel.exclude = [
     "include/**",
     "lib/**",
@@ -74,9 +75,10 @@ USE_EXAMPLES = "OFF"
 # vendoring by auditwheel/delocate/delvewheel.
 ALEMBIC_SHARED_LIBS = "OFF"
 CMAKE_POSITION_INDEPENDENT_CODE = "ON"
-# The rename knob and the wheel-layout / bundling settings.
+# The rename knob. Install location is handled in CMake via SKBUILD_PLATLIB_DIR
+# (do NOT set ALEMBIC_PYTHON_INSTALL_DIR here: it is a CACHE PATH, so a relative
+# -D value like "." is rewritten to an absolute source-tree path -> empty wheel).
 PYALEMBIC_MODULE_NAME = "alembic3d"
-ALEMBIC_PYTHON_INSTALL_DIR = "."
 PYALEMBIC_BUNDLE_IMATH_DIR = { env = "PYALEMBIC_BUNDLE_IMATH_DIR", default = "" }
 
 # ---------------------------------------------------------------------------
@@ -102,7 +104,7 @@ archs = ["x86_64"]
 environment = { DEPS_DIR = "/opt/wheel-deps", DEPS_SRC = "/opt/wheel-deps-src", BOOST_ROOT = "/opt/wheel-deps", CMAKE_PREFIX_PATH = "/opt/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "/opt/wheel-deps/sitepkg", LD_LIBRARY_PATH = "/opt/wheel-deps/lib:/opt/wheel-deps/lib64" }
 
 [tool.cibuildwheel.macos]
-environment = { DEPS_DIR = "$HOME/wheel-deps", DEPS_SRC = "$HOME/wheel-deps-src", BOOST_ROOT = "$HOME/wheel-deps", CMAKE_PREFIX_PATH = "$HOME/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "$HOME/wheel-deps/sitepkg", MACOSX_DEPLOYMENT_TARGET = "11.0", DYLD_LIBRARY_PATH = "$HOME/wheel-deps/lib", CMAKE_ARGS = "-DCMAKE_INSTALL_RPATH=$HOME/wheel-deps/lib" }
+environment = { DEPS_DIR = "$HOME/wheel-deps", DEPS_SRC = "$HOME/wheel-deps-src", BOOST_ROOT = "$HOME/wheel-deps", CMAKE_PREFIX_PATH = "$HOME/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "$HOME/wheel-deps/sitepkg", MACOSX_DEPLOYMENT_TARGET = "11.0", DYLD_LIBRARY_PATH = "$HOME/wheel-deps/lib", CMAKE_ARGS = "-DCMAKE_INSTALL_RPATH=$HOME/wheel-deps/lib -DCMAKE_OSX_ARCHITECTURES=$(uname -m)" }
 
 [tool.cibuildwheel.windows]
 environment = { DEPS_DIR = "C:/wheel-deps", DEPS_SRC = "C:/wheel-deps-src", BOOST_ROOT = "C:/wheel-deps", CMAKE_PREFIX_PATH = "C:/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "C:/wheel-deps/sitepkg", CXXFLAGS = "-DBOOST_ALL_NO_LIB -DBOOST_PYTHON_DYN_LINK" }

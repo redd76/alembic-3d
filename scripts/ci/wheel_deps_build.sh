@@ -64,7 +64,11 @@ using python : ${PY_VER} : ${PY_EXE} : ${PY_INCLUDE} ;
 EOF
     EXTRA=()
     if [[ "${IS_MACOS:-0}" == "1" ]]; then
-        EXTRA+=(linkflags="-undefined dynamic_lookup")
+        # Pin the arch to the runner's native arch. GitHub's arm64 (macos-14)
+        # runners otherwise let the toolchain default to x86_64, producing a
+        # wheel whose binaries fail delocate's --require-archs arm64 check.
+        MAC_ARCH="$(uname -m)"
+        EXTRA+=(cflags="-arch ${MAC_ARCH}" cxxflags="-arch ${MAC_ARCH}" linkflags="-arch ${MAC_ARCH} -undefined dynamic_lookup")
     fi
     ./b2 --user-config=user-config.jam --with-python \
         link=shared variant=release "${EXTRA[@]}" \
@@ -77,6 +81,11 @@ echo "Boost.Python installed."
 # ============================================================================
 cd "${DEPS_SRC}/imath"
 rm -rf build
+IMATH_EXTRA=()
+if [[ "${IS_MACOS:-0}" == "1" ]]; then
+    # Match Boost/alembic: force the native arch (see note above).
+    IMATH_EXTRA+=("-DCMAKE_OSX_ARCHITECTURES=$(uname -m)")
+fi
 cmake -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=ON \
@@ -87,7 +96,8 @@ cmake -S . -B build \
     -DBoost_ROOT="${DEPS_DIR}" \
     -DCMAKE_PREFIX_PATH="${DEPS_DIR}" \
     -DPYIMATH_OVERRIDE_PYTHON_INSTALL_DIR="${DEPS_DIR}/sitepkg" \
-    -DCMAKE_INSTALL_PREFIX="${DEPS_DIR}"
+    -DCMAKE_INSTALL_PREFIX="${DEPS_DIR}" \
+    "${IMATH_EXTRA[@]}"
 cmake --build build --config Release --parallel
 cmake --install build --config Release
 echo "Imath + PyImath installed."

@@ -151,11 +151,19 @@ TARGET_LINK_LIBRARIES(alembic
     ${ALEMBIC_PYIMATH_LIB}
 )
 
-SET( ALEMBIC_PYTHON_INSTALL_DIR
-    lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages
-    CACHE PATH
-    "Alembic's python bindings install directory"
-)
+IF (DEFINED SKBUILD)
+    # Wheel build: install the module at the wheel's platlib root. Using the
+    # absolute SKBUILD_PLATLIB_DIR avoids the relative->absolute conversion that
+    # a CACHE PATH would apply to a "." passed via -D (which lands in the source
+    # tree and produces an empty wheel).
+    SET( ALEMBIC_PYTHON_INSTALL_DIR "${SKBUILD_PLATLIB_DIR}" )
+ELSE()
+    SET( ALEMBIC_PYTHON_INSTALL_DIR
+        lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages
+        CACHE PATH
+        "Alembic's python bindings install directory"
+    )
+ENDIF()
 
 INSTALL (TARGETS alembic
     DESTINATION ${ALEMBIC_PYTHON_INSTALL_DIR}
