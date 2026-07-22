@@ -28,7 +28,7 @@ was branched from.
 |------|---------|
 | `pyproject.toml` | scikit-build-core build config + all cibuildwheel settings (matrix, per-OS dependency env, repair commands). Single source of the package name; version is read from the CMake `project()` call. |
 | `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts, and attaches them to a **GitHub Release** on `v*` tags. One job per (OS, Python) so all 12 build in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
-| `.github/workflows/upstream-sync.yml` | Scheduled poll of upstream `alembic/alembic`; when a new upstream release appears it opens a PR merging that release onto master. Merging it + pushing the mirror tag mirrors the release as our own. |
+| `.github/workflows/upstream-sync.yml` | Weekly poll of upstream `alembic/alembic` (also manually runnable); when a new upstream release appears it opens a PR merging that release onto master. Merging it + pushing the mirror tag mirrors the release as our own. |
 | `cmake/PyAlembicWheel.cmake` | Bundles the prebuilt PyImath `imath` extension into the wheel. No-op outside scikit-build wheel builds. |
 | `scripts/ci/wheel_deps_prepare.sh` | cibuildwheel `before-all`: downloads Boost + Imath sources, bootstraps Boost's `b2`, patches Imath's Python CMake for manylinux. |
 | `scripts/ci/wheel_deps_build.sh` | cibuildwheel `before-build`: builds **shared** Boost.Python + Imath/PyImath against the exact target CPython. |
@@ -137,17 +137,28 @@ GitHub Release for that tag:
 git tag v1.8.12
 git push origin v1.8.12
 ```
-Re-running a tag re-uploads (clobbers) the wheels on the existing release.
+If a release for that tag **already exists**, the job leaves it untouched — a
+re-run or a re-pushed tag never overwrites a published release by accident. To
+deliberately rebuild and replace one (error recovery), dispatch `wheels.yml`
+against the tag with `force_release=true`:
+```bash
+gh workflow run wheels.yml --ref v1.8.12 -f force_release=true
+```
 
 ## Tracking upstream
-`upstream-sync.yml` polls `alembic/alembic` daily (also runnable on demand). When
-upstream publishes a new release it opens a **sync PR** that merges the upstream
-release tag onto master — bringing the new upstream code onto our packaging. On a
-merge conflict it opens an issue instead. After you review and merge the sync PR,
-push the mirror tag (`v<version>`) to build the wheels and publish the mirrored
-release. Detection is a poll because GitHub cannot deliver another repo's release
-event here. Set an optional `SYNC_PAT` secret to have the sync PR run CI before
-you merge it (PRs opened by the default token don't trigger workflows).
+`upstream-sync.yml` polls `alembic/alembic` **weekly** (Mondays), and is runnable
+on demand from the Actions tab ("Run workflow"). When upstream publishes a new
+release it opens a **sync PR** that merges the upstream release tag onto master —
+bringing the new upstream code onto our packaging. On a merge conflict it opens an
+issue instead; if we're already in sync it does nothing. After you review and
+merge the sync PR, push the mirror tag (`v<version>`) to build the wheels and
+publish the mirrored release.
+
+Detection is a poll because GitHub cannot deliver another repo's release event
+here. The manual run takes an optional `tag` input and a `force` flag (to re-open
+a sync even if one already exists). Set an optional `SYNC_PAT` secret to have the
+sync PR run CI before you merge it (PRs opened by the default token don't trigger
+workflows).
 
 ## Building one wheel locally
 See `scripts/ci/README.md`. On Windows, from a target-Python venv with VS 2022

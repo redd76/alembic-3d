@@ -10,6 +10,11 @@ name: Wheels
 
 on:
   workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Overwrite an existing release's wheels (for error recovery). Dispatch against a v* tag ref."
+        type: boolean
+        default: false
   push:
     branches: [master]
     tags: ["v*"]
@@ -107,9 +112,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          # Only true on a manual workflow_dispatch with force_release checked.
+          FORCE: ${{ github.event.inputs.force_release || 'false' }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
+            # Release already exists: never overwrite by accident (a re-run or a
+            # re-pushed tag must not silently re-release). Overwrite only when
+            # explicitly forced for error recovery.
+            if [ "$FORCE" = "true" ]; then
+              echo "Release $TAG exists; force_release=true -> overwriting wheels."
+              gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
+            else
+              echo "Release $TAG already exists; leaving it untouched."
+              echo "To rebuild/replace it, dispatch this workflow against tag $TAG with force_release=true."
+            fi
           else
             gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" --generate-notes --verify-tag

@@ -15,12 +15,16 @@ name: Upstream sync
 
 on:
   schedule:
-    - cron: "0 6 * * *"      # daily at 06:00 UTC
+    - cron: "0 6 * * 1"      # weekly, Mondays at 06:00 UTC
   workflow_dispatch:
     inputs:
       tag:
         description: "Upstream tag to sync (default: latest upstream release)"
         required: false
+      force:
+        description: "Open a sync PR even if one already exists / the release is already mirrored"
+        type: boolean
+        default: false
 
 concurrency:
   group: upstream-sync
@@ -63,10 +67,14 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
         run: |
           MIRROR="${{ steps.up.outputs.mirror }}"
           BRANCH="${{ steps.up.outputs.branch }}"
-          if gh release view "$MIRROR" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [ "$FORCE" = "true" ]; then
+            echo "force=true -> not skipping."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          elif gh release view "$MIRROR" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $MIRROR already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
@@ -93,6 +101,10 @@ jobs:
 
           git checkout -b "$BRANCH"
           if git merge --no-edit "$TAG"; then
+            if [ "$(git rev-list --count origin/master..HEAD)" -eq 0 ]; then
+              echo "Already in sync with upstream $TAG (no new commits); nothing to open."
+              exit 0
+            fi
             git push origin "$BRANCH"
             {
               echo "Mirrors upstream **[$UPSTREAM release $TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)** by merging the upstream tag onto our alembic3d packaging."
