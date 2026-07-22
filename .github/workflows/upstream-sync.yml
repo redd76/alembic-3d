@@ -1,0 +1,117 @@
+name: Upstream sync
+
+# Polls the upstream Alembic repo for new releases and, when one appears, opens
+# a PR that merges the upstream release onto master (bringing the new upstream
+# code onto our alembic3d packaging). Merging that PR and pushing the mirror tag
+# (v<version>) builds the wheels and publishes our mirrored GitHub Release via
+# wheels.yml.
+#
+# GitHub cannot deliver another repo's release event to this repo, so detection
+# is a scheduled poll. Run it by hand any time via "Run workflow".
+#
+# Optional: set a repo secret SYNC_PAT (a fine-grained PAT with contents +
+# pull-requests write) to have the sync PR trigger CI before you merge it.
+# Branches/PRs created with the default GITHUB_TOKEN do not trigger workflows.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"      # daily at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream tag to sync (default: latest upstream release)"
+        required: false
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: alembic/alembic
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write         # push the sync branch
+      pull-requests: write     # open the sync PR
+      issues: write            # report merge conflicts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0                                  # full history for merge
+          token: ${{ secrets.SYNC_PAT || github.token }}
+
+      - name: Resolve upstream release tag
+        id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$UPSTREAM" --json tagName -q .tagName)
+          fi
+          # Upstream tags are bare versions (1.8.12); mirror as v1.8.12.
+          MIRROR="v${TAG#v}"
+          echo "tag=$TAG"       >> "$GITHUB_OUTPUT"
+          echo "mirror=$MIRROR" >> "$GITHUB_OUTPUT"
+          echo "branch=sync/upstream-$TAG" >> "$GITHUB_OUTPUT"
+          echo "Upstream release: $TAG  ->  mirror tag: $MIRROR"
+
+      - name: Skip if already mirrored or PR already open
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MIRROR="${{ steps.up.outputs.mirror }}"
+          BRANCH="${{ steps.up.outputs.branch }}"
+          if gh release view "$MIRROR" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $MIRROR already exists; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
+            echo "An open sync PR for $BRANCH already exists; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream and open sync PR
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          MIRROR="${{ steps.up.outputs.mirror }}"
+          BRANCH="${{ steps.up.outputs.branch }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --tags upstream
+
+          git checkout -b "$BRANCH"
+          if git merge --no-edit "$TAG"; then
+            git push origin "$BRANCH"
+            {
+              echo "Mirrors upstream **[$UPSTREAM release $TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)** by merging the upstream tag onto our alembic3d packaging."
+              echo ""
+              echo "After reviewing and merging, publish the mirrored release by pushing the tag:"
+              echo ""
+              echo '```'
+              echo "git tag $MIRROR && git push origin $MIRROR"
+              echo '```'
+              echo ""
+              echo "That triggers wheels.yml, which builds the wheels and creates the \`$MIRROR\` GitHub Release."
+              echo ""
+              echo "_Opened automatically by the upstream-sync workflow._"
+            } > pr_body.md
+            gh pr create --repo "$GITHUB_REPOSITORY" --base master --head "$BRANCH" \
+              --title "Sync upstream Alembic $TAG" --body-file pr_body.md
+          else
+            git merge --abort
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "Upstream sync $TAG has merge conflicts" \
+              --body "Merging upstream \`$TAG\` onto \`master\` conflicts and needs a manual sync. Resolve locally, then push the mirror tag \`$MIRROR\` to publish the release."
+          fi
