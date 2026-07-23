@@ -105,7 +105,11 @@ before-all = "bash {project}/scripts/ci/wheel_deps_prepare.sh"
 # before-build runs once per Python version: build Boost.Python + PyImath
 # against that exact interpreter.
 before-build = "bash {project}/scripts/ci/wheel_deps_build.sh"
-test-command = "python {project}/scripts/ci/run_wheel_tests.py"
+# Run the upstream unittest suite through pytest. conftest.py in the Tests dir
+# aliases the renamed module back to "alembic" and imports the bundled imath;
+# tomli backports tomllib on 3.10 (see python/PyAlembic/Tests/conftest.py).
+test-requires = ["pytest", "tomli; python_version < '3.11'"]
+test-command = "pytest -q {project}/python/PyAlembic/Tests"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
@@ -118,3 +122,22 @@ environment = { DEPS_DIR = "$HOME/wheel-deps", DEPS_SRC = "$HOME/wheel-deps-src"
 environment = { DEPS_DIR = "C:/wheel-deps", DEPS_SRC = "C:/wheel-deps-src", BOOST_ROOT = "C:/wheel-deps", CMAKE_PREFIX_PATH = "C:/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "C:/wheel-deps/sitepkg", CXXFLAGS = "-DBOOST_ALL_NO_LIB -DBOOST_PYTHON_DYN_LINK" }
 before-build = "pip install delvewheel && bash {project}/scripts/ci/wheel_deps_build.sh"
 repair-wheel-command = "delvewheel repair --add-path C:/wheel-deps/lib;C:/wheel-deps/bin -w {dest_dir} {wheel}"
+
+# ---------------------------------------------------------------------------
+# pytest: run the upstream PyAlembic suite (the cibuildwheel test-command).
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+# Upstream test files are camelCase (testCurves.py, testXform.py, ...), which
+# pytest's default `python_files = test_*.py` does NOT match. They are
+# unittest.TestCase modules, collected natively once the glob matches. testpaths
+# lets a bare `pytest` (from the repo root) target the suite too.
+python_files = ["test*.py"]
+testpaths = ["python/PyAlembic/Tests"]
+
+# ---------------------------------------------------------------------------
+# Dev-only tooling. Not required to build or test the wheel in CI; the footman
+# task runner (tasks.py) is a local convenience. Install with `pip install
+# footman` or `uv sync --group dev`.
+# ---------------------------------------------------------------------------
+[dependency-groups]
+dev = ["footman==0.19.0"]

@@ -8,7 +8,11 @@ the repo-root `pyproject.toml`, so a local run matches CI exactly.
 |--------|-------------------|------|---------|
 | `wheel_deps_prepare.sh` | `before-all` | once per OS | Download Boost + Imath sources, bootstrap b2, patch Imath's python CMake for manylinux |
 | `wheel_deps_build.sh` | `before-build` | once per Python version | Build **shared** Boost.Python + Imath/PyImath against that interpreter into `DEPS_DIR` |
-| `run_wheel_tests.py` | `test-command` | once per wheel | Alias `alembic3d` back to `alembic`, then run the upstream `RunTests.py` suite |
+| `compute_matrix.py` | (CI matrix) | once per workflow | Emit the CPython version matrix from `[tool.cibuildwheel].build` so `wheels.yml` never hardcodes it |
+
+The `test-command` is `pytest` (configured in `pyproject.toml`); the upstream
+suite is bootstrapped by `python/PyAlembic/Tests/conftest.py`, which aliases the
+renamed module back to `alembic` and imports the bundled `imath`.
 
 ## Dependency version pins
 
