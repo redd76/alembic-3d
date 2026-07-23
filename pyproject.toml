@@ -122,7 +122,10 @@ environment = { DEPS_DIR = "/opt/wheel-deps", DEPS_SRC = "/opt/wheel-deps-src", 
 environment = { DEPS_DIR = "$HOME/wheel-deps", DEPS_SRC = "$HOME/wheel-deps-src", BOOST_ROOT = "$HOME/wheel-deps", CMAKE_PREFIX_PATH = "$HOME/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "$HOME/wheel-deps/sitepkg", MACOSX_DEPLOYMENT_TARGET = "11.0", DYLD_LIBRARY_PATH = "$HOME/wheel-deps/lib", CMAKE_ARGS = "-DCMAKE_INSTALL_RPATH=$HOME/wheel-deps/lib -DCMAKE_OSX_ARCHITECTURES=$(uname -m)" }
 
 [tool.cibuildwheel.windows]
-environment = { DEPS_DIR = "C:/wheel-deps", DEPS_SRC = "C:/wheel-deps-src", BOOST_ROOT = "C:/wheel-deps", CMAKE_PREFIX_PATH = "C:/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "C:/wheel-deps/sitepkg", CXXFLAGS = "-DBOOST_ALL_NO_LIB -DBOOST_PYTHON_DYN_LINK /MP", CFLAGS = "/MP" }
+# NB: use `-MP` (dash), not `/MP`. These flags pass through Git Bash when the
+# dep scripts run, and MSYS path conversion rewrites a leading-slash `/MP` into
+# `C:/Program Files/Git/MP`, breaking the compile. cl.exe accepts `-MP` the same.
+environment = { DEPS_DIR = "C:/wheel-deps", DEPS_SRC = "C:/wheel-deps-src", BOOST_ROOT = "C:/wheel-deps", CMAKE_PREFIX_PATH = "C:/wheel-deps", PYALEMBIC_BUNDLE_IMATH_DIR = "C:/wheel-deps/sitepkg", CXXFLAGS = "-DBOOST_ALL_NO_LIB -DBOOST_PYTHON_DYN_LINK -MP", CFLAGS = "-MP" }
 before-build = "pip install delvewheel && bash {project}/scripts/ci/wheel_deps_build.sh"
 repair-wheel-command = "delvewheel repair --add-path C:/wheel-deps/lib;C:/wheel-deps/bin -w {dest_dir} {wheel}"
 
