@@ -136,11 +136,3 @@ repair-wheel-command = "delvewheel repair --add-path C:/wheel-deps/lib;C:/wheel-
 # lets a bare `pytest` (from the repo root) target the suite too.
 python_files = ["test*.py"]
 testpaths = ["python/PyAlembic/Tests"]
-
-# ---------------------------------------------------------------------------
-# Dev-only tooling. Not required to build or test the wheel in CI; the footman
-# task runner (tasks.py) is a local convenience. Install with `pip install
-# footman` or `uv sync --group dev`.
-# ---------------------------------------------------------------------------
-[dependency-groups]
-dev = ["footman==0.19.0"]

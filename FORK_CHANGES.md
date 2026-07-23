@@ -34,7 +34,6 @@ was branched from.
 | `scripts/ci/wheel_deps_build.sh` | cibuildwheel `before-build`: builds **shared** Boost.Python + Imath/PyImath against the exact target CPython. |
 | `scripts/ci/compute_matrix.py` | Emits the CPython version matrix (as JSON) from `[tool.cibuildwheel].build`, so `wheels.yml` derives the matrix instead of hardcoding it. |
 | `python/PyAlembic/Tests/conftest.py` | pytest `test-command` glue: resolves the import name from the single source, aliases the renamed module back to `alembic`, imports the bundled `imath`. Lets the upstream `test*.py` suite run unmodified. |
-| `tasks.py` | Dev-only [footman](https://github.com/willemkokke/footman) task runner (`fm identifiers` / `matrix` / `deps` / `wheel`) over cibuildwheel and the dep scripts. **Not used by CI.** |
 | `scripts/ci/README.md` | Documents the CI dependency scripts and the shared-library requirement. |
 | `.gitattributes` | Forces `*.sh` to LF so the shell scripts run on the Linux/macOS runners. |
 | `README-pypi.md` | PyPI long-description: usage plus a notice that this is an unofficial fork, not affiliated with the Alembic project. |
@@ -204,8 +203,6 @@ bash scripts/ci/wheel_deps_prepare.sh
 bash scripts/ci/wheel_deps_build.sh
 pipx run cibuildwheel --only cp312-win_amd64
 ```
-Or, with the dev tooling installed (`pip install footman`), the same flow via
-the task runner: `fm deps` then `fm wheel only=cp312-win_amd64` (see `tasks.py`).
 
 ## Notes for merging upstream
 - The upstream-file edits are intentionally small and default to upstream
