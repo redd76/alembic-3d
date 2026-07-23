@@ -151,22 +151,28 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Publish to PyPI on tags. Enable once the project is registered on PyPI with
-  # a trusted publisher (https://docs.pypi.org/trusted-publishers/) pointing at
-  # this workflow, and a "pypi" environment exists on this repo.
+  # Publish to PyPI on v* tags via trusted publishing (OIDC, no stored token).
+  # Requires (one-time, on pypi.org): a trusted publisher for project "alembic3d"
+  # pointing at owner=redd76, repo=alembic-3d, workflow=wheels.yml,
+  # environment=pypi. See https://docs.pypi.org/trusted-publishers/. The first
+  # successful publish registers (reserves) the project name.
   # ---------------------------------------------------------------------------
-  # publish:
-  #   name: Publish to PyPI
-  #   needs: build_wheels
-  #   if: startsWith(github.ref, 'refs/tags/v')
-  #   runs-on: ubuntu-latest
-  #   environment: pypi
-  #   permissions:
-  #     id-token: write          # trusted publishing (OIDC)
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist
-  #         merge-multiple: true
-  #     - uses: pypa/gh-action-pypi-publish@release/v1
+  publish:
+    name: Publish to PyPI
+    needs: build_wheels
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write          # trusted publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Re-runs / re-pushed tags must not fail if a version is already on
+          # PyPI (a released version can never be re-uploaded).
+          skip-existing: true
