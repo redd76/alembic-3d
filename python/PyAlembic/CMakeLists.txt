@@ -170,8 +170,11 @@ INSTALL (TARGETS alembic
 )
 
 # --- fork addition: configurable module name for wheel builds -----------------
-# Default "alembic" keeps upstream behavior; wheel builds pass e.g. alembic3d
-# so the package can coexist with SQLAlchemy's alembic.
+# The import name is an explicit knob, independent of the PyPI distribution
+# name ([project].name). It defaults to "alembic" (upstream behaviour); wheel
+# builds pass the desired name via -DPYALEMBIC_MODULE_NAME (sourced once from
+# pyproject's [tool.scikit-build.cmake.define], env-overridable) so the module
+# can coexist with SQLAlchemy's alembic.
 SET(PYALEMBIC_MODULE_NAME "alembic" CACHE STRING "Import name of the PyAlembic module")
 IF (NOT PYALEMBIC_MODULE_NAME STREQUAL "alembic")
     SET_TARGET_PROPERTIES(alembic PROPERTIES OUTPUT_NAME ${PYALEMBIC_MODULE_NAME})

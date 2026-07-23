@@ -79,10 +79,16 @@ USE_EXAMPLES = "OFF"
 # vendoring by auditwheel/delocate/delvewheel.
 ALEMBIC_SHARED_LIBS = "OFF"
 CMAKE_POSITION_INDEPENDENT_CODE = "ON"
-# The rename knob. Install location is handled in CMake via SKBUILD_PLATLIB_DIR
-# (do NOT set ALEMBIC_PYTHON_INSTALL_DIR here: it is a CACHE PATH, so a relative
-# -D value like "." is rewritten to an absolute source-tree path -> empty wheel).
-PYALEMBIC_MODULE_NAME = "alembic3d"
+# The import-name knob. This is the SINGLE place to set the importable module
+# name, and it is deliberately INDEPENDENT of the [project] distribution name
+# above: change this to rename `import <name>` without touching the PyPI name
+# (or vice-versa). Override per-build with the PYALEMBIC_MODULE_NAME env var.
+# NB: an import name must be a valid Python identifier (no '-'; they coincide as
+# "alembic3d" today only by choice).
+# Install location is handled in CMake via SKBUILD_PLATLIB_DIR (do NOT set
+# ALEMBIC_PYTHON_INSTALL_DIR here: it is a CACHE PATH, so a relative -D value
+# like "." is rewritten to an absolute source-tree path -> empty wheel).
+PYALEMBIC_MODULE_NAME = { env = "PYALEMBIC_MODULE_NAME", default = "alembic3d" }
 PYALEMBIC_BUNDLE_IMATH_DIR = { env = "PYALEMBIC_BUNDLE_IMATH_DIR", default = "" }
 
 # ---------------------------------------------------------------------------
