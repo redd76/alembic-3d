@@ -26,13 +26,15 @@ was branched from.
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | scikit-build-core build config + all cibuildwheel settings (matrix, per-OS dependency env, repair commands). Single source of the package name; version is read from the CMake `project()` call. |
-| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across CPython 3.10–3.13 via `pypa/cibuildwheel`, uploads them as artifacts, and attaches them to a **GitHub Release** on `v*` tags. One job per (OS, Python) so all 12 build in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
+| `pyproject.toml` | scikit-build-core build config + all cibuildwheel settings (build list, per-OS dependency env, repair commands, pytest test config). Single source of the CPython version set and of the two independent name knobs (distribution name `[project].name`; import name `PYALEMBIC_MODULE_NAME`). Version is read from the CMake `project()` call. |
+| `.github/workflows/wheels.yml` | CI: builds wheels for Windows / Linux (manylinux) / macOS across the CPython set via `pypa/cibuildwheel`, uploads them as artifacts, and attaches them to a **GitHub Release** on `v*` tags. A `compute-matrix` job derives the Python matrix from `pyproject.toml`, then one job per (OS, Python) builds in parallel, each caching its compiled Boost+Imath. Contains a commented-out PyPI-publish job for later. |
 | `.github/workflows/upstream-sync.yml` | Weekly poll of upstream `alembic/alembic` (also manually runnable); when a new upstream release appears it opens a PR merging that release onto master. Merging it + pushing the mirror tag mirrors the release as our own. |
 | `cmake/PyAlembicWheel.cmake` | Bundles the prebuilt PyImath `imath` extension into the wheel. No-op outside scikit-build wheel builds. |
 | `scripts/ci/wheel_deps_prepare.sh` | cibuildwheel `before-all`: downloads Boost + Imath sources, bootstraps Boost's `b2`, patches Imath's Python CMake for manylinux. |
 | `scripts/ci/wheel_deps_build.sh` | cibuildwheel `before-build`: builds **shared** Boost.Python + Imath/PyImath against the exact target CPython. |
-| `scripts/ci/run_wheel_tests.py` | cibuildwheel `test-command`: aliases `alembic3d` back to `alembic` and runs the upstream `RunTests.py` suite unmodified. |
+| `scripts/ci/compute_matrix.py` | Emits the CPython version matrix (as JSON) from `[tool.cibuildwheel].build`, so `wheels.yml` derives the matrix instead of hardcoding it. |
+| `python/PyAlembic/Tests/conftest.py` | pytest `test-command` glue: resolves the import name from the single source, aliases the renamed module back to `alembic`, imports the bundled `imath`. Lets the upstream `test*.py` suite run unmodified. |
+| `tasks.py` | Dev-only [footman](https://github.com/willemkokke/footman) task runner (`fm identifiers` / `matrix` / `deps` / `wheel`) over cibuildwheel and the dep scripts. **Not used by CI.** |
 | `scripts/ci/README.md` | Documents the CI dependency scripts and the shared-library requirement. |
 | `.gitattributes` | Forces `*.sh` to LF so the shell scripts run on the Linux/macOS runners. |
 | `README-pypi.md` | PyPI long-description: usage plus a notice that this is an unofficial fork, not affiliated with the Alembic project. |
@@ -58,7 +60,10 @@ component for building extension modules and works everywhere.
   path keeps the original `lib/pythonX.Y/site-packages` default.
 - Added a `PYALEMBIC_MODULE_NAME` cache variable (default `"alembic"`). When set
   to something else, the target's `OUTPUT_NAME` and a `PYALEMBIC_MODULE_NAME`
-  compile definition are set so the module is renamed.
+  compile definition are set so the module is renamed. Wheel builds set it from
+  the `[tool.scikit-build.cmake.define]` knob in `pyproject.toml` — the single,
+  env-overridable source of the import name, independent of the distribution
+  name (see [Configuration](#configuration)).
 - `INCLUDE`s the new `cmake/PyAlembicWheel.cmake`.
 
 ### `python/PyAlembic/main.cpp`
@@ -96,17 +101,21 @@ test suite run on the versions we build (3.10–3.13). No test logic changes.
 
 ## How the wheel is built
 
-1. **cibuildwheel** drives each build (config in `pyproject.toml`). The workflow
-   runs one job per (OS, Python version) so all 12 build in parallel.
+1. **cibuildwheel** drives each build (config in `pyproject.toml`). The
+   `compute-matrix` job derives the Python set from `pyproject.toml`, then the
+   workflow runs one job per (OS, Python version) so all build in parallel.
 2. `wheel_deps_prepare.sh` fetches Boost + Imath sources.
 3. `wheel_deps_build.sh` builds **shared** Boost.Python and Imath/PyImath against
    that interpreter into a fixed prefix.
 4. **scikit-build-core** builds Alembic with `USE_PYALEMBIC=ON`,
-   `ALEMBIC_SHARED_LIBS=OFF` (static core), `PYALEMBIC_MODULE_NAME=alembic3d`,
-   producing the `alembic3d` extension and bundling the `imath` extension.
+   `ALEMBIC_SHARED_LIBS=OFF` (static core), and `PYALEMBIC_MODULE_NAME` from the
+   pyproject knob (`alembic3d` by default), producing the renamed extension and
+   bundling the `imath` extension.
 5. The repair tools (auditwheel / delocate / delvewheel) vendor the shared
    Boost.Python, PyImath and Imath libraries into the wheel.
-6. `run_wheel_tests.py` installs the wheel and runs the upstream test suite.
+6. cibuildwheel's `test-command` runs **pytest** over the upstream suite;
+   `python/PyAlembic/Tests/conftest.py` aliases the renamed module back to
+   `alembic` and imports the bundled `imath` first.
 
 ### Licensing of the wheel
 All components are permissive (no copyleft): Alembic is BSD-3-Clause, Imath/PyImath
@@ -172,6 +181,20 @@ a sync even if one already exists). Set an optional `SYNC_PAT` secret to have th
 sync PR run CI before you merge it (PRs opened by the default token don't trigger
 workflows).
 
+## Configuration
+
+Everything you are likely to change lives in **one** place each. Nothing here is
+duplicated across files any more.
+
+| To change… | Edit | Notes |
+|------------|------|-------|
+| **CPython versions built** | `[tool.cibuildwheel].build` in `pyproject.toml` | The CI matrix is derived from this by `scripts/ci/compute_matrix.py`; no second list in `wheels.yml`. (`requires-python` / `classifiers` are static metadata mirrors — update if you drop/add a major version.) |
+| **Import name** (`import <name>`) | `PYALEMBIC_MODULE_NAME` in `[tool.scikit-build.cmake.define]` (`pyproject.toml`) | Independent of the PyPI name. Must be a valid Python identifier. Override per build with the `PYALEMBIC_MODULE_NAME` env var. |
+| **Distribution name** (PyPI / `pip install`) | `[project].name` in `pyproject.toml` | Independent of the import name; also update `[project.urls]` and the prose in `README-pypi.md`. |
+| **Boost / Imath versions** | `BOOST_VERSION` / `IMATH_VERSION` env (defaults in `scripts/ci/wheel_deps_prepare.sh`) | Changing these busts the CI dep cache automatically. |
+| **Target OSes** | the `os:` list in `.github/workflows/wheels.yml` | Add the matching `cache_path` under `include:`. |
+| **Package version** | the `project()` call in the root `CMakeLists.txt` | Read into the wheel via `scikit_build_core.metadata.regex`. |
+
 ## Building one wheel locally
 See `scripts/ci/README.md`. On Windows, from a target-Python venv with VS 2022
 and Git Bash:
@@ -181,10 +204,17 @@ bash scripts/ci/wheel_deps_prepare.sh
 bash scripts/ci/wheel_deps_build.sh
 pipx run cibuildwheel --only cp312-win_amd64
 ```
+Or, with the dev tooling installed (`pip install footman`), the same flow via
+the task runner: `fm deps` then `fm wheel only=cp312-win_amd64` (see `tasks.py`).
 
 ## Notes for merging upstream
 - The upstream-file edits are intentionally small and default to upstream
   behaviour; conflicts should be rare and localised.
+- The four `python/PyAlembic/Tests/*.py` edits (`assertEquals`→`assertEqual`,
+  `failUnlessRaises`→`assertRaises`) exist only because this fork branched from
+  an older upstream. Current upstream `master` already uses the 3.12-safe
+  spellings (verified in `testTypes.py`), so **drop these local edits when
+  syncing to an upstream that includes them** — they will otherwise conflict.
 - `wheel_deps_prepare.sh` patches Imath's Python CMake with `sed` rather than a
   context diff, so it tolerates minor Imath reformatting. Dependency versions
   (`BOOST_VERSION`, `IMATH_VERSION`) are pinned there and overridable by env.
