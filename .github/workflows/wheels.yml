@@ -32,8 +32,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The Python version set is declared once, in [tool.cibuildwheel].build in
+  # pyproject.toml. This job derives the interpreter tags from it so the build
+  # matrix below is never hand-maintained (change the set in one place).
+  compute-matrix:
+    name: Compute Python matrix
+    runs-on: ubuntu-latest
+    outputs:
+      py: ${{ steps.set.outputs.py }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"      # tomllib; must be >= 3.11
+      - id: set
+        run: python scripts/ci/compute_matrix.py
+
   build_wheels:
     name: ${{ matrix.py }} on ${{ matrix.os }}
+    needs: compute-matrix
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -46,7 +63,8 @@ jobs:
         # by GitHub and Intel runners are now paid-only, so x86_64 macOS wheels
         # are not built; Intel Mac users can build from source.
         os: [ubuntu-24.04, windows-2022, macos-14]
-        py: [cp310, cp311, cp312, cp313]
+        # Derived from pyproject's [tool.cibuildwheel].build (see compute-matrix).
+        py: ${{ fromJSON(needs.compute-matrix.outputs.py) }}
         include:
           # Host path that holds the compiled deps and is cached. On Linux it is
           # bind-mounted into the manylinux container (see CIBW_CONTAINER_ENGINE)
