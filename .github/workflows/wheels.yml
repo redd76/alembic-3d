@@ -2,7 +2,8 @@ name: Wheels
 
 # Builds the alembic3d Python wheels (PyAlembic bindings, renamed to avoid the
 # SQLAlchemy "alembic" clash) for Windows, Linux (manylinux) and macOS across
-# CPython 3.10-3.13 via cibuildwheel. Configuration lives in pyproject.toml.
+# the CPython versions declared in pyproject.toml ([tool.cibuildwheel].build).
+# All configuration lives in pyproject.toml.
 #
 # Wheels upload as build artifacts on every run, and are attached to a GitHub
 # Release when a v* tag is pushed. To also publish to PyPI, uncomment the
@@ -54,10 +55,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # One job per (OS, Python version) so all 12 build in parallel instead of
-      # each OS building the four Python versions sequentially. Each job also
-      # caches its compiled Boost.Python + Imath so unchanged deps are restored
-      # instead of recompiled.
+      # One job per (OS, Python version) so every combination builds in parallel
+      # instead of each OS building its Python versions sequentially. Each job
+      # also caches its compiled Boost.Python + Imath so unchanged deps are
+      # restored instead of recompiled.
       matrix:
         # macos-14 = arm64 (Apple Silicon). Intel macOS (macos-13) was retired
         # by GitHub and Intel runners are now paid-only, so x86_64 macOS wheels

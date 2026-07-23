@@ -152,8 +152,8 @@ Both extensions must therefore resolve to the same shared libraries, and the
 - **Python** — CPython 3.10–3.13.
 
 ## Releasing
-Push a version tag and the workflow builds all 12 wheels and attaches them to a
-GitHub Release for that tag:
+Push a version tag and the workflow builds every wheel in the matrix and
+attaches them to a GitHub Release for that tag:
 ```bash
 git tag v1.8.12
 git push origin v1.8.12
