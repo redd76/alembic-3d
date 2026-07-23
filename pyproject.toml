@@ -108,7 +108,10 @@ before-build = "bash {project}/scripts/ci/wheel_deps_build.sh"
 # Run the upstream unittest suite through pytest. conftest.py in the Tests dir
 # aliases the renamed module back to "alembic" and imports the bundled imath;
 # tomli backports tomllib on 3.10 (see python/PyAlembic/Tests/conftest.py).
-test-requires = ["pytest", "tomli; python_version < '3.11'"]
+# NB: cibuildwheel splits test-requires on whitespace, so entries must be
+# space-free (no PEP 508 environment markers here). tomli is required
+# unconditionally — harmless on 3.11+, where conftest prefers stdlib tomllib.
+test-requires = ["pytest", "tomli"]
 test-command = "pytest -q {project}/python/PyAlembic/Tests"
 
 [tool.cibuildwheel.linux]
