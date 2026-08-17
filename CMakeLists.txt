@@ -35,7 +35,11 @@
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.29)
 
-PROJECT(Alembic VERSION 1.8.12)
+# Fork versioning: the first three digits are ALWAYS the upstream Alembic
+# version. The optional 4th digit is the alembic3d wheel re-release number for
+# packaging-only releases (e.g. 1.8.12.1 = upstream 1.8.12, wheel revision 1).
+# Drop it when syncing to a new upstream version.
+PROJECT(Alembic VERSION 1.8.12.1)
 
 MESSAGE(STATUS "CMAKE SYSTEM NAME: ${CMAKE_SYSTEM_NAME}")
 
@@ -236,7 +240,7 @@ ENDIF()
 # PyAlembic
 IF (USE_PYALEMBIC)
 
-    FIND_PACKAGE(Python COMPONENTS Interpreter Development)
+    FIND_PACKAGE(Python COMPONENTS Interpreter Development.Module)
 
     if(Python_FOUND)
         MESSAGE(STATUS "Found Python ${Python_VERSION}")

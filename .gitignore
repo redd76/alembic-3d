@@ -27,3 +27,6 @@ build
 
 # Build Folder
 BUILD
+
+# Local planning/working notes — kept out of the repo by request.
+devlog/

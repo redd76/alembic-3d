@@ -67,14 +67,14 @@ class CollectionTest(unittest.TestCase):
         prop = group.getSchema().createCollection("prop")
         prop.setValue(strVec)
 
-        self.assertEquals(group.getSchema().getNumCollections(), 1)
+        self.assertEqual(group.getSchema().getNumCollections(), 1)
 
         # TODO passing in time sampling here causes a segfault, most likely because
         # of how createCollection currently takes an Argument &, see #274
         cool = group.getSchema().createCollection("cool", md)
         cool.setTimeSampling(ts)
 
-        self.assertEquals(
+        self.assertEqual(
             group.getSchema().getCollection(1).getMetaData().get("coupe"),
             "de ville" )
 

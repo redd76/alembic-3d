@@ -1,0 +1,193 @@
+name: Wheels
+
+# Builds the alembic3d Python wheels (PyAlembic bindings, renamed to avoid the
+# SQLAlchemy "alembic" clash) for Windows, Linux (manylinux) and macOS across
+# the CPython versions declared in pyproject.toml ([tool.cibuildwheel].build).
+# All configuration lives in pyproject.toml.
+#
+# Wheels upload as build artifacts on every run, and are attached to a GitHub
+# Release when a v* tag is pushed. To also publish to PyPI, uncomment the
+# "publish" job and configure a trusted publisher / the "pypi" environment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Overwrite an existing release's wheels (for error recovery). Dispatch against a v* tag ref."
+        type: boolean
+        default: false
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - pyproject.toml
+      - .github/workflows/wheels.yml
+      - scripts/ci/**
+      - cmake/PyAlembicWheel.cmake
+      - python/**
+      - CMakeLists.txt
+
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The Python version set is declared once, in [tool.cibuildwheel].build in
+  # pyproject.toml. This job derives the interpreter tags from it so the build
+  # matrix below is never hand-maintained (change the set in one place).
+  compute-matrix:
+    name: Compute Python matrix
+    runs-on: ubuntu-latest
+    outputs:
+      py: ${{ steps.set.outputs.py }}
+    steps:
+      - uses: actions/checkout@v4
+      # The wheel version is baked in from CMakeLists.txt, not from the tag
+      # (see [tool.scikit-build.metadata.version] in pyproject.toml). On tag
+      # pushes, fail fast if the two disagree instead of publishing a release
+      # whose tag and package version differ.
+      - name: Check tag matches CMakeLists version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(sed -nE 's/^PROJECT\(Alembic VERSION ([0-9.]+)\).*/\1/p' CMakeLists.txt)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match CMakeLists.txt version $VERSION." \
+                 "Retag as v$VERSION, or update the PROJECT() version."
+            exit 1
+          fi
+          echo "Tag v$TAG matches CMakeLists.txt version $VERSION."
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"      # tomllib; must be >= 3.11
+      - id: set
+        run: python scripts/ci/compute_matrix.py
+
+  build_wheels:
+    name: ${{ matrix.py }} on ${{ matrix.os }}
+    needs: compute-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # One job per (OS, Python version) so every combination builds in parallel
+      # instead of each OS building its Python versions sequentially. Each job
+      # also caches its compiled Boost.Python + Imath so unchanged deps are
+      # restored instead of recompiled.
+      matrix:
+        # macos-14 = arm64 (Apple Silicon). Intel macOS (macos-13) was retired
+        # by GitHub and Intel runners are now paid-only, so x86_64 macOS wheels
+        # are not built; Intel Mac users can build from source.
+        os: [ubuntu-24.04, windows-2022, macos-14]
+        # Derived from pyproject's [tool.cibuildwheel].build (see compute-matrix).
+        py: ${{ fromJSON(needs.compute-matrix.outputs.py) }}
+        include:
+          # Host path that holds the compiled deps and is cached. On Linux it is
+          # bind-mounted into the manylinux container (see CIBW_CONTAINER_ENGINE)
+          # so the container's writes persist to the host for caching.
+          - os: ubuntu-24.04
+            cache_path: /tmp/wheel-deps
+          - os: windows-2022
+            cache_path: C:/wheel-deps
+          - os: macos-14
+            cache_path: /Users/runner/wheel-deps
+    env:
+      # Build only this job's Python version (overrides pyproject build list).
+      CIBW_BUILD: ${{ matrix.py }}-*
+      # Bind-mount the host dep cache into the manylinux container. Ignored on
+      # macOS/Windows (no container). The container path matches DEPS_DIR in
+      # pyproject's [tool.cibuildwheel.linux].environment.
+      CIBW_CONTAINER_ENGINE: "docker; create_args: -v /tmp/wheel-deps:/opt/wheel-deps"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare dep cache dir
+        shell: bash
+        run: mkdir -p "${{ matrix.cache_path }}"
+
+      - name: Cache compiled Boost + Imath
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache_path }}
+          # Bust the cache when the dependency build scripts change (they pin the
+          # Boost/Imath versions).
+          key: wheel-deps-${{ matrix.os }}-${{ matrix.py }}-${{ hashFiles('scripts/ci/wheel_deps_prepare.sh', 'scripts/ci/wheel_deps_build.sh') }}
+
+      - name: Build wheel
+        uses: pypa/cibuildwheel@v4.2.0
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.py }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Attach all wheels to a GitHub Release when a v* tag is pushed.
+  #   git tag v1.8.12 && git push origin v1.8.12
+  # ---------------------------------------------------------------------------
+  github_release:
+    name: GitHub Release
+    needs: build_wheels
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # required to create/update releases
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          # Only true on a manual workflow_dispatch with force_release checked.
+          FORCE: ${{ github.event.inputs.force_release || 'false' }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Release already exists: never overwrite by accident (a re-run or a
+            # re-pushed tag must not silently re-release). Overwrite only when
+            # explicitly forced for error recovery.
+            if [ "$FORCE" = "true" ]; then
+              echo "Release $TAG exists; force_release=true -> overwriting wheels."
+              gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
+            else
+              echo "Release $TAG already exists; leaving it untouched."
+              echo "To rebuild/replace it, dispatch this workflow against tag $TAG with force_release=true."
+            fi
+          else
+            gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --generate-notes --verify-tag
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI on v* tags via trusted publishing (OIDC, no stored token).
+  # Requires (one-time, on pypi.org): a trusted publisher for project "alembic3d"
+  # pointing at owner=redd76, repo=alembic-3d, workflow=wheels.yml,
+  # environment=pypi. See https://docs.pypi.org/trusted-publishers/. The first
+  # successful publish registers (reserves) the project name.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: build_wheels
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write          # trusted publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Re-runs / re-pushed tags must not fail if a version is already on
+          # PyPI (a released version can never be re-uploaded).
+          skip-existing: true

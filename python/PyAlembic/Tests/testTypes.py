@@ -60,7 +60,7 @@ class TypesTest(unittest.TestCase):
         self.assertIsNotNone(POD.kUnknownPOD)
 
         # If a new POD type is added, this will throw an exception
-        self.assertEquals(POD.kNumPlainOldDataTypes, 14)
+        self.assertEqual(POD.kNumPlainOldDataTypes, 14)
 
     def testDataTypeWrapper(self):
         # Default Constructor
