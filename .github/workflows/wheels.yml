@@ -43,6 +43,21 @@ jobs:
       py: ${{ steps.set.outputs.py }}
     steps:
       - uses: actions/checkout@v4
+      # The wheel version is baked in from CMakeLists.txt, not from the tag
+      # (see [tool.scikit-build.metadata.version] in pyproject.toml). On tag
+      # pushes, fail fast if the two disagree instead of publishing a release
+      # whose tag and package version differ.
+      - name: Check tag matches CMakeLists version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(sed -nE 's/^PROJECT\(Alembic VERSION ([0-9.]+)\).*/\1/p' CMakeLists.txt)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match CMakeLists.txt version $VERSION." \
+                 "Retag as v$VERSION, or update the PROJECT() version."
+            exit 1
+          fi
+          echo "Tag v$TAG matches CMakeLists.txt version $VERSION."
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"      # tomllib; must be >= 3.11
@@ -99,7 +114,7 @@ jobs:
           key: wheel-deps-${{ matrix.os }}-${{ matrix.py }}-${{ hashFiles('scripts/ci/wheel_deps_prepare.sh', 'scripts/ci/wheel_deps_build.sh') }}
 
       - name: Build wheel
-        uses: pypa/cibuildwheel@v3.1.4
+        uses: pypa/cibuildwheel@v4.2.0
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4

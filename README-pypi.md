@@ -36,4 +36,4 @@ bundles the following components and reproduces their licenses in the wheel's
 - **Boost.Python** — Boost Software License 1.0 (`THIRD-PARTY.txt`)
 
 Platforms: Windows (x86_64), Linux (manylinux, x86_64), macOS (arm64).
-Python: CPython 3.10–3.13.
+Python: CPython 3.10–3.14.

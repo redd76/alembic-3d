@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: C++",
     "Topic :: Multimedia :: Graphics :: 3D Modeling",
 ]
@@ -65,10 +66,14 @@ wheel.exclude = [
 ]
 
 # Version is the single source of truth in the root CMakeLists project() call.
+# Three digits = the upstream Alembic version; an optional 4th digit is the
+# alembic3d wheel re-release number for packaging-only releases (1.8.12.1 =
+# upstream 1.8.12, wheel revision 1). The upstream digits are never changed
+# independently of upstream.
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
 input = "CMakeLists.txt"
-regex = 'PROJECT\(Alembic VERSION (?P<value>[0-9]+\.[0-9]+\.[0-9]+)\)'
+regex = 'PROJECT\(Alembic VERSION (?P<value>[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?)\)'
 
 [tool.scikit-build.cmake.define]
 USE_PYALEMBIC = "ON"
@@ -95,7 +100,7 @@ PYALEMBIC_BUNDLE_IMATH_DIR = { env = "PYALEMBIC_BUNDLE_IMATH_DIR", default = "" 
 # cibuildwheel: matrix + per-platform dependency provisioning.
 # ---------------------------------------------------------------------------
 [tool.cibuildwheel]
-build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*"]
+build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*", "cp314-*"]
 # musllinux/32-bit are out of scope; VFX tooling is glibc/64-bit.
 skip = ["*-musllinux_*", "*_i686", "*-win32", "*t-*"]
 build-verbosity = 1
